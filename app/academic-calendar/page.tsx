@@ -13,7 +13,18 @@ import { Textarea } from '@/components/ui/textarea'
 import { useBatch } from '@/context/batch-context'
 import { useToast } from '@/hooks/use-toast'
 
-const fetcher = (url: string) => fetch(url).then((response) => response.json())
+const fetcher = async (url: string) => {
+  const response = await fetch(url)
+  const result = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message =
+      result && typeof result === 'object' && 'error' in result
+        ? String((result as any).error)
+        : 'Failed to load academic calendar'
+    throw new Error(message)
+  }
+  return result
+}
 
 type CalendarEvent = {
   event_id: number
@@ -48,10 +59,11 @@ export default function AcademicCalendarPage() {
   const [notes, setNotes] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
-  const { data: events = [], mutate } = useSWR<CalendarEvent[]>(
+  const { data, error, mutate } = useSWR<CalendarEvent[]>(
     batch ? `/api/academic-calendar?batch_id=${batch.batch_id}&department=${batch.department}` : null,
     fetcher,
   )
+  const events = Array.isArray(data) ? data : []
 
   const selectedIso = toIsoDate(selectedDate)
 
@@ -136,6 +148,17 @@ export default function AcademicCalendarPage() {
         <h1 className="text-3xl font-bold text-slate-900">Academic Calendar</h1>
         <p className="text-slate-600 mt-1">Add holidays, exams, and important events for your batch.</p>
       </div>
+
+      {error ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Calendar Not Available</CardTitle>
+            <CardDescription>
+              {error.message}. If you just deployed, run the latest SQL in `scripts/supabase-schema.sql` to create the `academic_calendar_events` table.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-1">
@@ -247,4 +270,3 @@ export default function AcademicCalendarPage() {
     </div>
   )
 }
-

@@ -12,7 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useBatch } from '@/context/batch-context'
 import { useToast } from '@/hooks/use-toast'
 
-const fetcher = (url: string) => fetch(url).then((response) => response.json())
+const fetcher = async (url: string) => {
+  const response = await fetch(url)
+  const result = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message =
+      result && typeof result === 'object' && 'error' in result ? String((result as any).error) : 'Failed to load timetable'
+    throw new Error(message)
+  }
+  return result
+}
 
 type TimetableEntry = {
   entry_id: number
@@ -53,14 +62,16 @@ export default function TimetablePage() {
   const [room, setRoom] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
-  const { data: entries = [], mutate } = useSWR<TimetableEntry[]>(
+  const { data, error, mutate } = useSWR<TimetableEntry[]>(
     batch ? `/api/timetable?batch_id=${batch.batch_id}&department=${batch.department}&year=${year}&section=${encodeURIComponent(section)}` : null,
     fetcher,
   )
 
+  const entries = Array.isArray(data) ? data : []
+
   const bySlot = useMemo(() => {
     const map = new Map<string, TimetableEntry>()
-    ;(entries ?? []).forEach((entry) => {
+    entries.forEach((entry) => {
       map.set(`${entry.day_of_week}-${entry.period}`, entry)
     })
     return map
@@ -142,6 +153,17 @@ export default function TimetablePage() {
         <h1 className="text-3xl font-bold text-slate-900">Class Timetable</h1>
         <p className="text-slate-600 mt-1">Weekly timetable view by year and section.</p>
       </div>
+
+      {error ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Timetable Not Available</CardTitle>
+            <CardDescription>
+              {error.message}. If you just deployed, run the latest SQL in `scripts/supabase-schema.sql` to create the `class_timetable_entries` table.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -276,4 +298,3 @@ export default function TimetablePage() {
     </div>
   )
 }
-

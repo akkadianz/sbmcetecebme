@@ -399,6 +399,24 @@ export const yearRecordOps = {
 }
 
 export const paymentOps = {
+  _nextReceiptNumberFallback: async (batchId: number) => {
+    const { data, error } = await supabaseAdmin
+      .from('payments')
+      .select('payment_id,receipt_number')
+      .eq('batch_id', batchId)
+      .order('payment_id', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) throw error
+
+    const lastReceipt = String(data?.receipt_number ?? '').trim()
+    const match = /^RCPT-(\d+)$/.exec(lastReceipt)
+    const nextNumber = match ? Number(match[1]) + 1 : Number(data?.payment_id ?? 0) + 1
+    const safe = Number.isFinite(nextNumber) && nextNumber > 0 ? nextNumber : 1
+    return `RCPT-${String(safe).padStart(5, '0')}`
+  },
+
   create: async (
     yearRecordId: number,
     studentId: number,
@@ -437,31 +455,56 @@ export const paymentOps = {
     if (existingError) throw existingError
     if (existing) throw new Error('Bill number already exists')
 
+    // Prefer DB-side sequence via RPC, but fall back if the function isn't available in prod.
+    let receiptNumber: string
     const { data: receiptData, error: receiptError } = await supabaseAdmin
       .rpc('next_receipt_number', { batch_id_input: batchId })
 
-    if (receiptError) throw receiptError
+    if (receiptError) {
+      receiptNumber = await paymentOps._nextReceiptNumberFallback(batchId)
+    } else {
+      receiptNumber = String(receiptData)
+    }
 
-    const receiptNumber = String(receiptData)
+    let payment: PaymentRecord | null = null
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { data: inserted, error: paymentError } = await supabaseAdmin
+        .from('payments')
+        .insert({
+          year_record_id: yearRecordId,
+          student_id: studentId,
+          batch_id: batchId,
+          bill_number: billNumber.trim(),
+          receipt_number: receiptNumber,
+          amount,
+          payment_method: paymentMethod,
+          payment_date: paymentDate,
+          reference_number: referenceNumber,
+          notes,
+        })
+        .select('*')
+        .single()
 
-    const { data: payment, error: paymentError } = await supabaseAdmin
-      .from('payments')
-      .insert({
-        year_record_id: yearRecordId,
-        student_id: studentId,
-        batch_id: batchId,
-        bill_number: billNumber.trim(),
-        receipt_number: receiptNumber,
-        amount,
-        payment_method: paymentMethod,
-        payment_date: paymentDate,
-        reference_number: referenceNumber,
-        notes,
-      })
-      .select('*')
-      .single()
+      if (!paymentError) {
+        payment = inserted as PaymentRecord
+        break
+      }
 
-    if (paymentError) throw paymentError
+      // If the receipt number collided (possible with fallback), retry with a freshly computed value.
+      const isUniqueViolation = paymentError.code === '23505'
+      const likelyReceiptCollision =
+        typeof paymentError.message === 'string' &&
+        (paymentError.message.includes('payments_unique_receipt') || paymentError.message.toLowerCase().includes('receipt'))
+
+      if (isUniqueViolation && likelyReceiptCollision) {
+        receiptNumber = await paymentOps._nextReceiptNumberFallback(batchId)
+        continue
+      }
+
+      throw paymentError
+    }
+
+    if (!payment) throw new Error('Failed to allocate a unique receipt number')
 
     const updatedPaid = toNumber(record.paid_amount) + amount
     const updated = {
@@ -483,7 +526,7 @@ export const paymentOps = {
 
     if (updateError) throw updateError
 
-    return payment as PaymentRecord
+    return payment
   },
 
   getByStudent: async (studentId: number) => {
