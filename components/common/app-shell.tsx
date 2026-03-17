@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 
 import { BatchHeader } from '@/components/common/batch-header'
 import { Sidebar } from '@/components/common/sidebar'
@@ -9,13 +9,21 @@ import { useBatch } from '@/context/batch-context'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const { isLoggedIn, isReady } = useBatch()
+  const pathname = usePathname()
+  const { batch, isLoggedIn, isReady } = useBatch()
 
   useEffect(() => {
     if (isReady && !isLoggedIn) {
       router.push('/')
     }
   }, [isLoggedIn, isReady, router])
+
+  useEffect(() => {
+    if (!isReady || !isLoggedIn || !batch) return
+    if (batch.role === 'student' && !pathname.startsWith('/student')) {
+      router.push('/student')
+    }
+  }, [batch, isLoggedIn, isReady, pathname, router])
 
   if (!isReady || !isLoggedIn) return null
 
@@ -26,7 +34,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="relative z-10">
         <BatchHeader />
         <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 pb-6 pt-4 sm:px-6 lg:flex-row">
-          <Sidebar />
+          {batch?.role === 'student' ? null : <Sidebar />}
           <main className="min-w-0 flex-1 overflow-auto rounded-[28px] border border-white/65 bg-white/72 shadow-[0_20px_80px_rgba(76,97,166,0.12)] backdrop-blur-xl">
             {children}
           </main>

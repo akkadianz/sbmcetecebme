@@ -65,6 +65,7 @@ export function CreateBatchForm() {
         batch_name: batch.batch_name,
         department: 'ECE',
         created_at: new Date().toISOString(),
+        role: 'admin',
       });
 
       toast({

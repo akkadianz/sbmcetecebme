@@ -1,16 +1,20 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import Papa from 'papaparse'
 import { AlertCircle, FileText, Upload } from 'lucide-react'
+import useSWR from 'swr'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useBatch } from '@/context/batch-context'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/utils'
+
+const fetcher = (url: string) => fetch(url).then((response) => response.json())
 
 type YearFeeRow = {
   year: number
@@ -33,9 +37,15 @@ type CsvRow = {
   year_fees: YearFeeRow[]
 }
 
+type ImportAction = 'create' | 'skip' | 'update'
+
 function toNumber(value: string) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+function normalizeRoll(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, '')
 }
 
 function normalizeHeader(header: string) {
@@ -132,9 +142,37 @@ export default function ImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [rows, setRows] = useState<CsvRow[]>([])
+  const [actionsByRoll, setActionsByRoll] = useState<Record<string, ImportAction>>({})
+
+  const { data: existingStudents = [] } = useSWR<Array<{ student_id: number; student_id_roll: string }>>(
+    batch ? `/api/students?batch_id=${batch.batch_id}&department=${batch.department}` : null,
+    fetcher,
+  )
 
   const validRows = rows.filter((row) => row.student_id_roll && row.first_name && row.last_name && row.year_fees.length === 4)
   const invalidCount = rows.length - validRows.length
+
+  const existingRolls = useMemo(() => {
+    const map = new Map<string, { student_id: number; student_id_roll: string }>()
+    existingStudents.forEach((student) => map.set(normalizeRoll(student.student_id_roll), student))
+    return map
+  }, [existingStudents])
+
+  const previewRows = useMemo(() => {
+    return rows.map((row) => {
+      const rollKey = normalizeRoll(row.student_id_roll || '')
+      const isValid = Boolean(row.student_id_roll && row.first_name && row.last_name && row.year_fees?.length === 4)
+      const existing = rollKey ? existingRolls.get(rollKey) ?? null : null
+      const isDuplicate = Boolean(existing)
+      const action: ImportAction = actionsByRoll[rollKey] ?? (isDuplicate ? 'skip' : 'create')
+      return { row, rollKey, isValid, existing, isDuplicate, action }
+    })
+  }, [actionsByRoll, existingRolls, rows])
+
+  const duplicateCount = previewRows.filter((item) => item.isDuplicate && item.isValid).length
+  const createCount = previewRows.filter((item) => item.isValid && item.action === 'create').length
+  const updateCount = previewRows.filter((item) => item.isValid && item.action === 'update').length
+  const skipCount = previewRows.filter((item) => item.isValid && item.action === 'skip').length
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -150,6 +188,7 @@ export default function ImportPage() {
       const text = await file.text()
       const parsedRows = parseCsv(text)
       setRows(parsedRows)
+      setActionsByRoll({})
       toast({ title: 'File loaded', description: `Found ${parsedRows.length} rows to review` })
     } catch {
       toast({ title: 'Error', description: 'Failed to read CSV file', variant: 'destructive' })
@@ -162,30 +201,43 @@ export default function ImportPage() {
     if (!batch || !validRows.length) return
 
     setIsLoading(true)
-    let imported = 0
-    let skipped = 0
+    try {
+      const payloadRows = previewRows
+        .filter((item) => item.isValid)
+        .map((item) => ({
+          ...item.row,
+          action: item.action,
+        }))
 
-    for (const row of validRows) {
-      const response = await fetch('/api/students', {
+      const response = await fetch('/api/import/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           batch_id: batch.batch_id,
-          ...row,
           department: batch.department,
-          course: batch.department,
+          rows: payloadRows,
         }),
       })
 
-      if (response.ok) imported += 1
-      else skipped += 1
-    }
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to import students')
+      }
 
-    toast({
-      title: 'Import complete',
-      description: `Imported ${imported} students${skipped ? `, skipped ${skipped}` : ''}`,
-    })
-    setIsLoading(false)
+      const errorCount = Array.isArray(result.errors) ? result.errors.length : 0
+      toast({
+        title: 'Import complete',
+        description: `Created ${result.created}, updated ${result.updated}, skipped ${result.skipped}${errorCount ? `, errors ${errorCount}` : ''}`,
+      })
+
+      setRows([])
+      setActionsByRoll({})
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to import students'
+      toast({ title: 'Error', description: message, variant: 'destructive' })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -229,7 +281,17 @@ export default function ImportPage() {
                     <p className="text-sm text-slate-600">
                       Previewing {rows.length} rows{invalidCount ? ` (${invalidCount} invalid)` : ''}
                     </p>
-                    <Button onClick={importRows} disabled={isLoading || !validRows.length}>Import Students</Button>
+                    <Button onClick={importRows} disabled={isLoading || !validRows.length}>Import</Button>
+                  </div>
+                  <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                    <p>
+                      Duplicates detected: <span className="font-semibold text-slate-900">{duplicateCount}</span>
+                    </p>
+                    <p>
+                      Plan: create <span className="font-semibold text-slate-900">{createCount}</span>, update{' '}
+                      <span className="font-semibold text-slate-900">{updateCount}</span>, skip{' '}
+                      <span className="font-semibold text-slate-900">{skipCount}</span>
+                    </p>
                   </div>
                   {invalidCount ? (
                     <p className="text-xs text-amber-600">
@@ -244,13 +306,18 @@ export default function ImportPage() {
                           <TableHead>Name</TableHead>
                           <TableHead>Year</TableHead>
                           <TableHead>Section</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Action</TableHead>
                           <TableHead>Year 1 Total</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {rows.slice(0, 10).map((row, index) => {
+                        {previewRows.slice(0, 25).map((item, index) => {
+                          const row = item.row
                           const yearOne = row.year_fees[0]
                           const yearOneTotal = yearOne.tuition_fee + yearOne.books_fee + yearOne.bus_fee + yearOne.hostel_fee + yearOne.misc_fee
+                          const statusLabel = !item.isValid ? 'Invalid' : item.isDuplicate ? 'Duplicate' : 'New'
+                          const statusClass = !item.isValid ? 'text-red-700' : item.isDuplicate ? 'text-amber-700' : 'text-green-700'
 
                           return (
                             <TableRow key={`${row.student_id_roll}-${index}`}>
@@ -258,6 +325,32 @@ export default function ImportPage() {
                               <TableCell>{row.first_name} {row.last_name}</TableCell>
                               <TableCell>{row.year}</TableCell>
                               <TableCell>{row.section}</TableCell>
+                              <TableCell className={`font-semibold ${statusClass}`}>{statusLabel}</TableCell>
+                              <TableCell>
+                                {item.isValid ? (
+                                  <Select
+                                    value={item.action}
+                                    onValueChange={(value) => {
+                                      const next = value as ImportAction
+                                      setActionsByRoll((current) => ({ ...current, [item.rollKey]: next }))
+                                    }}
+                                    disabled={isLoading}
+                                  >
+                                    <SelectTrigger className="h-8 w-[120px]">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="create">Create</SelectItem>
+                                      <SelectItem value="skip">Skip</SelectItem>
+                                      <SelectItem value="update" disabled={!item.isDuplicate}>
+                                        Update
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <span className="text-xs text-slate-500">Fix CSV</span>
+                                )}
+                              </TableCell>
                               <TableCell>{formatCurrency(yearOneTotal)}</TableCell>
                             </TableRow>
                           )
@@ -265,6 +358,7 @@ export default function ImportPage() {
                       </TableBody>
                     </Table>
                   </div>
+                  <p className="text-xs text-slate-500">Showing first 25 rows.</p>
                 </div>
               ) : null}
             </CardContent>

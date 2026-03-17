@@ -10,6 +10,16 @@ export const batchLoginSchema = z.object({
 
 export type BatchLoginInput = z.infer<typeof batchLoginSchema>
 
+export const studentLoginSchema = z.object({
+  batchName: z.string().min(1, 'Batch name is required'),
+  department: departmentSchema,
+  student_name: z.string().min(1, 'Student name is required'),
+  student_id_roll: z.string().optional(),
+  password: z.string().min(1, 'Mobile number is required'),
+})
+
+export type StudentLoginInput = z.infer<typeof studentLoginSchema>
+
 export const batchCreateSchema = z.object({
   batchName: z.string().min(4, 'Batch name must be at least 4 characters'),
   password: z.string().min(1, 'Password is required'),

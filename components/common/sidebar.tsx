@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   ArrowRight,
+  CalendarClock,
+  CalendarDays,
   LayoutDashboard,
   Users,
   CreditCard,
@@ -22,6 +24,16 @@ const navItems = [
     label: 'Dashboard',
     href: '/batch-dashboard',
     icon: LayoutDashboard,
+  },
+  {
+    label: 'Academic Calendar',
+    href: '/academic-calendar',
+    icon: CalendarDays,
+  },
+  {
+    label: 'Timetable',
+    href: '/timetable',
+    icon: CalendarClock,
   },
   {
     label: 'Students',
@@ -63,6 +75,14 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname()
   const { batch } = useBatch()
+  const role = batch?.role ?? 'admin'
+
+  const filteredNav = navItems.filter((item) => {
+    if (role === 'staff') {
+      return item.href !== '/settings'
+    }
+    return true
+  })
 
   return (
     <aside className="w-full shrink-0 lg:w-[290px]">
@@ -89,7 +109,7 @@ export function Sidebar() {
         </div>
 
         <nav className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-        {navItems.map((item) => {
+        {filteredNav.map((item) => {
           const Icon = item.icon
           const isActive = pathname.startsWith(item.href)
 

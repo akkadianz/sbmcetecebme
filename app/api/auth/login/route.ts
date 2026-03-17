@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
       batch_id: batch?.batch_id,
       batch_name: batch?.batch_name,
       created_at: batch?.created_at,
+      role: 'admin',
     })
   } catch (error) {
     console.error('[v0] Auth login error:', error)

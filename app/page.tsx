@@ -10,13 +10,13 @@ import { useBatch } from '@/context/batch-context'
 
 export default function Home() {
   const router = useRouter()
-  const { isLoggedIn, isReady } = useBatch()
+  const { batch, isLoggedIn, isReady } = useBatch()
 
   useEffect(() => {
     if (isReady && isLoggedIn) {
-      router.push('/batch-dashboard')
+      router.push(batch?.role === 'student' ? '/student' : '/batch-dashboard')
     }
-  }, [isLoggedIn, isReady, router])
+  }, [batch?.role, isLoggedIn, isReady, router])
 
   if (!isReady) return null
 

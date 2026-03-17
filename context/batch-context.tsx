@@ -2,11 +2,16 @@
 
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 
+export type UserRole = 'admin' | 'staff' | 'student'
+
 interface BatchSession {
   batch_id: number;
   batch_name: string;
   department: 'ECE' | 'BME';
   created_at: string;
+  role: UserRole;
+  student_id?: number;
+  student_name?: string;
 }
 
 interface BatchContextType {
@@ -33,6 +38,7 @@ export function BatchProvider({ children }: { children: ReactNode }) {
         setBatchState({
           ...parsedSession,
           department: parsedSession.department || 'ECE',
+          role: parsedSession.role || 'admin',
         });
       } catch {
         sessionStorage.removeItem('batch_session');
