@@ -16,6 +16,25 @@ function batchEmail(batchName: string) {
   return `batch-${batchName.toLowerCase()}@sms.local`
 }
 
+async function findAuthUserByEmail(email: string) {
+  // supabase-js v2 doesn't expose getUserByEmail; list + filter is the supported approach.
+  // These batch accounts are few, so a small paged scan is fine.
+  const normalizedEmail = email.trim().toLowerCase()
+  const perPage = 1000
+
+  for (let page = 1; page <= 10; page++) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage })
+    if (error) throw error
+
+    const match = data.users.find((user) => (user.email ?? '').toLowerCase() === normalizedEmail)
+    if (match) return match
+
+    if (data.users.length < perPage) return null
+  }
+
+  return null
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -32,10 +51,10 @@ export async function POST(request: NextRequest) {
     })
 
     if (signInError || !signIn.session) {
-      const { data: existingUser } = await supabaseAdmin.auth.admin.getUserByEmail(email)
+      const existingUser = await findAuthUserByEmail(email)
 
-      if (existingUser?.user) {
-        await supabaseAdmin.auth.admin.updateUserById(existingUser.user.id, {
+      if (existingUser) {
+        await supabaseAdmin.auth.admin.updateUserById(existingUser.id, {
           password,
           email_confirm: true,
         })
