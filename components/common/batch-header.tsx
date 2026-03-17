@@ -15,6 +15,7 @@ import { DEPARTMENT_FULL_NAMES } from '@/lib/constants'
 import { useBatch } from '@/context/batch-context'
 import { ChevronDown, LogOut, ShieldCheck, Sparkles } from 'lucide-react'
 import Image from 'next/image'
+import { DensityToggle } from '@/components/common/density-toggle'
 
 export function BatchHeader() {
   const { batch, logout } = useBatch()
@@ -72,7 +73,7 @@ export function BatchHeader() {
               <ShieldCheck className="h-3.5 w-3.5" />
               College Identity
             </div>
-            <h1 className="truncate text-lg font-semibold tracking-[-0.03em] text-slate-950 sm:text-[1.45rem]">
+            <h1 className="text-lg font-semibold tracking-[-0.03em] text-slate-950 leading-tight break-words sm:text-[1.45rem]">
               {collegeTitle}
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-600">
@@ -88,29 +89,34 @@ export function BatchHeader() {
           </div>
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-11 w-full justify-between rounded-full border-white/70 bg-white/85 px-4 shadow-sm sm:w-auto"
-            >
-              <span className="max-w-32 truncate font-semibold text-slate-700 sm:max-w-none">{batch?.batch_name}</span>
-              <ChevronDown className="h-4 w-4 text-slate-500" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64 rounded-2xl border-white/70 bg-white/90 backdrop-blur-xl">
-            <DropdownMenuLabel className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">{batch?.batch_name}</p>
-              <p className="text-xs font-normal text-slate-500">{departmentTitle}</p>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <DensityToggle className="justify-center sm:justify-start" />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-11 h-auto w-full justify-between rounded-full border-white/70 bg-white/85 px-4 py-2 shadow-sm whitespace-normal sm:w-auto"
+              >
+                <span className="flex-1 min-w-0 text-left font-semibold text-slate-700 break-words leading-snug">
+                  {batch?.batch_name}
+                </span>
+                <ChevronDown className="ml-3 h-4 w-4 text-slate-500 shrink-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64 rounded-2xl border-white/70 bg-white/90 backdrop-blur-xl">
+              <DropdownMenuLabel className="space-y-1">
+                <p className="text-sm font-semibold text-slate-900 break-words">{batch?.batch_name}</p>
+                <p className="text-xs font-normal text-slate-500 break-words">{departmentTitle}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </header>
   )

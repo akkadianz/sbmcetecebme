@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 import Image from 'next/image'
 
 import { LoginForm } from '@/components/auth/login-form'
+import { DensityToggle } from '@/components/common/density-toggle'
 import { useBatch } from '@/context/batch-context'
 
 export default function Home() {
@@ -34,6 +35,9 @@ export default function Home() {
               priority
               className="h-20 w-20 rounded-2xl border border-white/70 bg-white/80 object-contain p-2 shadow-sm sm:h-[88px] sm:w-[88px]"
             />
+          </div>
+          <div className="mb-3 flex justify-center">
+            <DensityToggle />
           </div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
             SBM College of Engineering and Technology

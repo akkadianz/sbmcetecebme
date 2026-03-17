@@ -4,11 +4,21 @@ import { attendanceOps, attendanceSettingsOps, batchOps, studentOps } from '@/li
 
 export const runtime = 'nodejs'
 
-function formatDate(value: Date) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+const ATTENDANCE_TIME_ZONE = process.env.ATTENDANCE_TIME_ZONE ?? 'Asia/Kolkata'
+
+function todayInTimeZone(timeZone: string) {
+  // 'en-CA' yields YYYY-MM-DD which matches our API validation.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+
+function dayOfWeekFromIsoDate(date: string) {
+  const [year, month, day] = date.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay()
 }
 
 function isValidDate(value: string) {
@@ -41,8 +51,8 @@ export async function GET(request: NextRequest) {
     const dayEntries = Array.from({ length: daysInMonth }, (_, index) => {
       const day = String(index + 1).padStart(2, '0')
       const date = `${month}-${day}`
-      const dateObj = new Date(`${date}T00:00:00`)
-      const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6
+      const dow = dayOfWeekFromIsoDate(date)
+      const isWeekend = dow === 0 || dow === 6
       const excluded = holidays.has(date) || (excludeWeekends && isWeekend)
       return { date, day: index + 1, excluded }
     })
@@ -205,14 +215,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'batch_id, date and student_id(s) are required' }, { status: 400 })
     }
 
-    const today = formatDate(new Date())
+    const today = todayInTimeZone(ATTENDANCE_TIME_ZONE)
     if (date !== today) {
       return NextResponse.json({ error: 'Attendance can only be edited on the same day' }, { status: 403 })
     }
 
     const monthKey = date.slice(0, 7)
     const settings = await attendanceSettingsOps.getByBatchMonth(batchId, monthKey)
-    const isWeekend = new Date(`${date}T00:00:00`).getDay() === 0 || new Date(`${date}T00:00:00`).getDay() === 6
+    const dow = dayOfWeekFromIsoDate(date)
+    const isWeekend = dow === 0 || dow === 6
     const excluded = (settings.exclude_weekends && isWeekend) || (settings.holidays ?? []).includes(date)
     if (excluded) {
       return NextResponse.json({ error: 'Attendance cannot be edited on excluded days' }, { status: 403 })

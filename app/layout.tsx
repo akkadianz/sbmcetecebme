@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist_Mono, Manrope } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import Script from 'next/script'
 import { BatchProvider } from '@/context/batch-context'
 import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
@@ -33,7 +34,24 @@ export default function RootLayout({
   const analyticsEnabled = process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === 'true'
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <Script id="ui-density" strategy="beforeInteractive">{`
+(function () {
+  try {
+    var key = 'ui-density';
+    var stored = localStorage.getItem(key);
+    var density = stored;
+    if (density !== 'compact' && density !== 'comfortable') {
+      density = (window.matchMedia && window.matchMedia('(max-width: 640px)').matches)
+        ? 'compact'
+        : 'comfortable';
+    }
+    document.documentElement.dataset.density = density;
+  } catch (e) {}
+})();
+        `}</Script>
+      </head>
       <body className={`${manrope.variable} ${geistMono.variable} font-sans antialiased`}>
         <BatchProvider>
           {children}

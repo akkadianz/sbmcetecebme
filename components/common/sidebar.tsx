@@ -116,7 +116,9 @@ export function Sidebar() {
               </div>
               <div className="min-w-0">
                 <p className="font-medium">{item.label}</p>
-                <p className="truncate text-xs text-slate-400">{item.href.replace('/', '').replace('-', ' ') || 'home'}</p>
+                <p className="text-xs text-slate-400 whitespace-normal break-words">
+                  {item.href.replace('/', '').replace('-', ' ') || 'home'}
+                </p>
               </div>
             </Link>
           )
