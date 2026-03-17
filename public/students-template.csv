@@ -1,0 +1,3 @@
+student_id_roll,first_name,last_name,year,section,email,phone,hostel_status,year1_tuition_fee,year1_books_fee,year1_bus_fee,year1_hostel_fee,year1_misc_fee,year2_tuition_fee,year2_books_fee,year2_bus_fee,year2_hostel_fee,year2_misc_fee,year3_tuition_fee,year3_books_fee,year3_bus_fee,year3_hostel_fee,year3_misc_fee,year4_tuition_fee,year4_books_fee,year4_bus_fee,year4_hostel_fee,year4_misc_fee
+ECE001,Anita,Kumar,1,A,anita@example.com,9876543210,day-scholar,50000,5000,2000,0,3000,52000,5000,2000,0,3000,54000,5500,2500,0,3000,56000,5500,2500,0,3500
+BME001,Rahul,Das,2,B,rahul@example.com,9876501234,hostel,50000,5000,2000,20000,3000,52000,5000,2000,20000,3000,54000,5500,2500,21000,3000,56000,5500,2500,21000,3500
