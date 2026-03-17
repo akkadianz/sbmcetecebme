@@ -112,11 +112,11 @@ export default function AttendancePage() {
   const last7Days = useMemo(() => effectiveDays.slice(-7), [effectiveDays])
 
   const attendanceSummary = useMemo(() => {
+    const activeDayLimit = effectiveDays.length
     if (!students?.length) {
-      return { average: 0, totalPresent: 0 }
+      return { average: 0, totalPresent: 0, activeDayLimit }
     }
 
-    const activeDayLimit = effectiveDays.length
     const totalSlots = students.length * activeDayLimit
     let totalPresent = 0
 
@@ -130,7 +130,7 @@ export default function AttendancePage() {
 
     const average = totalSlots ? Math.round((totalPresent / totalSlots) * 100) : 0
     return { average, totalPresent, activeDayLimit }
-  }, [students, days, editableDayLimit, attendanceSet])
+  }, [students, effectiveDays, attendanceSet])
 
   const studentStats = useMemo(() => {
     if (!students?.length) return []

@@ -95,7 +95,31 @@ function toMonthRange(month: string) {
 }
 
 function sumFees(fees: Pick<YearRecord, 'tuition_fee' | 'books_fee' | 'bus_fee' | 'hostel_fee' | 'misc_fee'>) {
-  return fees.tuition_fee + fees.books_fee + fees.bus_fee + fees.hostel_fee + fees.misc_fee
+  return (
+    toNumber(fees.tuition_fee) +
+    toNumber(fees.books_fee) +
+    toNumber(fees.bus_fee) +
+    toNumber(fees.hostel_fee) +
+    toNumber(fees.misc_fee)
+  )
+}
+
+function toNumber(value: unknown) {
+  const numberValue = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number(value)
+  return Number.isFinite(numberValue) ? numberValue : 0
+}
+
+function normalizeYearRecordNumbers(record: YearRecord) {
+  ;(record as unknown as Record<string, unknown>).tuition_fee = toNumber((record as unknown as Record<string, unknown>).tuition_fee)
+  ;(record as unknown as Record<string, unknown>).books_fee = toNumber((record as unknown as Record<string, unknown>).books_fee)
+  ;(record as unknown as Record<string, unknown>).bus_fee = toNumber((record as unknown as Record<string, unknown>).bus_fee)
+  ;(record as unknown as Record<string, unknown>).hostel_fee = toNumber((record as unknown as Record<string, unknown>).hostel_fee)
+  ;(record as unknown as Record<string, unknown>).misc_fee = toNumber((record as unknown as Record<string, unknown>).misc_fee)
+  ;(record as unknown as Record<string, unknown>).total_fee = toNumber((record as unknown as Record<string, unknown>).total_fee)
+  ;(record as unknown as Record<string, unknown>).paid_amount = toNumber((record as unknown as Record<string, unknown>).paid_amount)
+  ;(record as unknown as Record<string, unknown>).outstanding_amount = toNumber(
+    (record as unknown as Record<string, unknown>).outstanding_amount,
+  )
 }
 
 function createYearRecordInsert(
@@ -132,9 +156,12 @@ function createYearRecordInsert(
 }
 
 function recalculateYearRecord(record: YearRecord) {
+  // Supabase returns numeric columns as strings by default; normalize before math.
+  normalizeYearRecordNumbers(record)
   record.total_fee = sumFees(record)
-  record.outstanding_amount = Math.max(0, record.total_fee - record.paid_amount)
-  record.status = record.paid_amount >= record.total_fee ? 'paid' : record.paid_amount > 0 ? 'partially-paid' : 'pending'
+  record.outstanding_amount = Math.max(0, toNumber(record.total_fee) - toNumber(record.paid_amount))
+  record.status =
+    toNumber(record.paid_amount) >= toNumber(record.total_fee) ? 'paid' : toNumber(record.paid_amount) > 0 ? 'partially-paid' : 'pending'
   record.updated_at = new Date().toISOString()
 }
 
@@ -303,7 +330,9 @@ export const yearRecordOps = {
       .order('year', { ascending: true })
 
     if (error) throw error
-    return (data ?? []) as YearRecord[]
+    const records = (data ?? []) as YearRecord[]
+    records.forEach(normalizeYearRecordNumbers)
+    return records
   },
 
   getById: async (id: number) => {
@@ -314,7 +343,9 @@ export const yearRecordOps = {
       .maybeSingle()
 
     if (error) throw error
-    return data as YearRecord | null
+    const record = data as YearRecord | null
+    if (record) normalizeYearRecordNumbers(record)
+    return record
   },
 
   getByBatch: async (batchId: number) => {
@@ -324,7 +355,9 @@ export const yearRecordOps = {
       .eq('batch_id', batchId)
 
     if (error) throw error
-    return (data ?? []) as YearRecord[]
+    const records = (data ?? []) as YearRecord[]
+    records.forEach(normalizeYearRecordNumbers)
+    return records
   },
 
   update: async (id: number, updates: Partial<YearRecord>) => {
@@ -337,29 +370,31 @@ export const yearRecordOps = {
     if (currentError) throw currentError
     if (!current) return null
 
-    const record = { ...current, ...updates } as YearRecord
-    recalculateYearRecord(record)
+    const nextRecord = { ...(current as YearRecord), ...updates } as YearRecord
+    recalculateYearRecord(nextRecord)
 
     const { data, error } = await supabaseAdmin
       .from('year_records')
       .update({
-        tuition_fee: record.tuition_fee,
-        books_fee: record.books_fee,
-        bus_fee: record.bus_fee,
-        hostel_fee: record.hostel_fee,
-        misc_fee: record.misc_fee,
-        total_fee: record.total_fee,
-        paid_amount: record.paid_amount,
-        outstanding_amount: record.outstanding_amount,
-        status: record.status,
-        updated_at: record.updated_at,
+        tuition_fee: nextRecord.tuition_fee,
+        books_fee: nextRecord.books_fee,
+        bus_fee: nextRecord.bus_fee,
+        hostel_fee: nextRecord.hostel_fee,
+        misc_fee: nextRecord.misc_fee,
+        total_fee: nextRecord.total_fee,
+        paid_amount: nextRecord.paid_amount,
+        outstanding_amount: nextRecord.outstanding_amount,
+        status: nextRecord.status,
+        updated_at: nextRecord.updated_at,
       })
       .eq('year_record_id', id)
       .select('*')
       .maybeSingle()
 
     if (error) throw error
-    return data as YearRecord | null
+    const updatedRecord = data as YearRecord | null
+    if (updatedRecord) normalizeYearRecordNumbers(updatedRecord)
+    return updatedRecord
   },
 }
 
@@ -383,10 +418,11 @@ export const paymentOps = {
 
     if (yearError) throw yearError
     const record = ensureData(yearRecord as YearRecord | null, 'Year record not found')
+    normalizeYearRecordNumbers(record)
 
     if (!billNumber.trim()) throw new Error('Bill number is required')
     if (amount <= 0) throw new Error('Payment amount must be greater than 0')
-    if (amount > record.outstanding_amount) throw new Error('Payment exceeds outstanding amount')
+    if (amount > toNumber(record.outstanding_amount)) throw new Error('Payment exceeds outstanding amount')
     if (record.batch_id !== batchId || record.student_id !== studentId) {
       throw new Error('Payment record does not belong to the selected student or batch')
     }
@@ -427,7 +463,7 @@ export const paymentOps = {
 
     if (paymentError) throw paymentError
 
-    const updatedPaid = record.paid_amount + amount
+    const updatedPaid = toNumber(record.paid_amount) + amount
     const updated = {
       ...record,
       paid_amount: updatedPaid,

@@ -54,23 +54,6 @@ export default function Home() {
         <div className="w-full rounded-[32px] border border-white/70 bg-white/78 p-4 shadow-[0_20px_60px_rgba(76,97,166,0.12)] backdrop-blur-xl sm:p-5">
           <LoginForm />
         </div>
-
-        <div className="mt-6 rounded-[28px] border border-white/70 bg-white/76 p-5 shadow-[0_16px_40px_rgba(76,97,166,0.08)]">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Available Batches</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              ['2023-27', '2327'],
-              ['2024-28', '2428'],
-              ['2025-29', '2529'],
-              ['2026-30', '2630'],
-            ].map(([batchName, password]) => (
-              <div key={batchName} className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3">
-                <p className="font-semibold text-slate-900">{batchName}</p>
-                <p className="mt-1 text-sm text-slate-500">Password: {password}</p>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </main>
   )

@@ -5,8 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(amount: number) {
-  return `Rs. ${amount.toLocaleString('en-IN')}`
+function toFiniteNumber(value: unknown) {
+  const numberValue = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number(value)
+  return Number.isFinite(numberValue) ? numberValue : 0
+}
+
+export function formatCurrency(amount: number | string | null | undefined) {
+  const safeAmount = toFiniteNumber(amount)
+  return `Rs. ${safeAmount.toLocaleString('en-IN')}`
 }
 
 export function downloadBlob(filename: string, blob: Blob) {
